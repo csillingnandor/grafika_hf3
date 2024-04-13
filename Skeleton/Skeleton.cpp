@@ -115,9 +115,16 @@ public:
 
 	bool Contains(vec3 point) {
 		
-		return length(point - center) < radius;
+		return sqrt(pow(abs(point.x - center.x), 2) + pow(abs(point.y - center.y), 2)) < radius;
 	}
 };
+
+bool BaseContains(vec3 point) {
+	return sqrt(pow(point.x - 0, 2) + pow(point.y - 0, 2)) < 1;
+}
+
+
+
 
 class CircleCollection {
 	std::vector<Circle> circles;
@@ -140,30 +147,7 @@ public:
 		return circles.at(idx);
 	}
 
-};
-
-CircleCollection* circleCollection;
-
-
-class PoincareTexture {
-public:
-	unsigned int textureId;
-	std::vector<vec4> image;
-
-	PoincareTexture(int width, int height, std::vector<vec4>& image) {
-		textureId = 0;
-		this->image = image;
-		UploadTexture(width, height, image);
-	}
-	void UploadTexture(int width, int height, std::vector<vec4>& image) {
-		glGenTextures(1, &textureId);
-		glBindTexture(GL_TEXTURE_2D, textureId); 
-		glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, width, height, 0, GL_RGBA, GL_FLOAT, &image[0]); 
-		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-	}
-
-	void CreateImage() {
+	void CreateCircles() {
 		vec3 startingPoint(0, 0, 1);
 		float degree = 0;
 		vec3 v0(cos(degree), sin(degree), 0);
@@ -178,15 +162,114 @@ public:
 			}
 		}
 
-		
+
 		for (int i = 0; i < hyperbolic.size(); i++) {
 			vec3 r = vec3(hyperbolic[i].x / (hyperbolic[i].z + 1), hyperbolic[i].y / (hyperbolic[i].z + 1), 0);
 			Circle circle;
 			circle.CalcCircle(r);
-			circleCollection->Add(circle);
+			Add(circle);
+
 		}
 	}
+
 };
+
+
+CircleCollection* circleCollection;
+
+
+int GetCircleCount(std::vector<Circle>& circles, int x, int y);
+
+
+class PoincareTexture {
+public:
+	unsigned int textureId;
+	std::vector<vec4> image;
+	int resolutionX, resolutionY;
+	int filter1, filter2;
+
+	PoincareTexture(int width, int height, int filter1 = GL_LINEAR, int filter2 = GL_LINEAR) {
+		textureId = 0;
+		this->resolutionX = width;
+		this->resolutionY = height;
+		this->filter1 = filter1;
+		this->filter2 = filter2;
+	}
+	void UploadTexture() {
+		glGenTextures(1, &textureId);
+		glBindTexture(GL_TEXTURE_2D, textureId); 
+		glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, resolutionX, resolutionY, 0, GL_RGBA, GL_FLOAT, &image[0]); 
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, filter1);
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, filter2);
+	}
+
+	void IncreaseResolution() {
+		if (resolutionX <= 900)
+			resolutionX += 100;
+		if (resolutionY <= 900)
+			resolutionY += 100;
+	}
+
+	void DecreaseResolution() {
+		if (resolutionX > 100) 
+			resolutionX -= 100;
+		if (resolutionY > 100)
+			resolutionY -= 100;
+	}
+
+
+	void CreateImage() {
+		vec3 pixel;
+		for (int i = 0; i < resolutionX; i++) {
+			for (int j = 0; j < resolutionY; j++) {
+				pixel = vec3(((i / (float) resolutionX) - 0.5) * 2, ((j / (float) resolutionY) - 0.5) * 2, 0);
+				int circleCount = GetCircleCount(circleCollection->GetCircles(), i, j);
+				if (!BaseContains(pixel)) {
+					image.push_back(vec4(0, 0, 0, 0));
+				}
+
+				else {
+					if (circleCount % 2 == 0)
+						image.push_back(vec4(1, 1, 0, 0));
+					else
+						image.push_back(vec4(0, 0, 1, 0));
+				}
+
+			}
+		}
+	}
+
+	void Clear() {
+		image.clear();
+	}
+
+	void UpdateTexture() {
+		Clear();
+		CreateImage();
+		UploadTexture();
+	}
+
+	void SetFiltering(int filter) {
+		filter1 = filter;
+		filter2 = filter;
+	}
+};
+
+PoincareTexture* tex = new PoincareTexture(100, 100, GL_NEAREST, GL_LINEAR);
+
+int GetCircleCount(std::vector<Circle>& circles, int x, int y) {
+	int circleCount = 0;
+
+	for (int i = 0; i < circles.size(); i++) {
+		vec3 pixel = vec3(((x / (float) tex->resolutionX) - 0.5) * 2, ((y / (float) tex->resolutionY) - 0.5) * 2, 0);
+
+		if (circles[i].Contains(pixel)) {
+			circleCount++;
+		}
+
+	}
+	return circleCount;
+}
 
 
 
@@ -197,9 +280,15 @@ public:
 	unsigned int vao, vbo[2];
 	PoincareTexture* tex;
 	int s;
+	long time, deltaTime;
+	float rotationAngle, orbitAngle;
 
 	Star(PoincareTexture* texture) {
 		this->tex = texture;
+		this->time = 0;
+		this->deltaTime = 0;
+		this->rotationAngle = 0;
+		this->orbitAngle = 0;
 		s = 40;
 		Create();
 	}
@@ -210,6 +299,67 @@ public:
 
 	void Decrement() {
 		s -= 10;
+	}
+
+	void UpdateAngle(long currentTime) {
+		deltaTime = currentTime - time;
+		time = currentTime;
+
+		Orbit(deltaTime);
+		Rotate(deltaTime);
+	}
+
+	void Rotate(long deltaTime) {
+		rotationAngle += 360 * deltaTime / 1000;
+		if (rotationAngle > 360) {
+			rotationAngle -= 360;
+		}
+		rotationAngle = rotationAngle * M_PI / 180;
+		mat4 TranslateMat = TranslateMatrix(-vtxs[0]);
+		mat4 RotationMat = RotationMatrix(rotationAngle, vec3(0, 0, 1));
+		mat4 InvTranslateMat = TranslateMatrix(vtxs[0]);
+
+
+		for (int i = 1; i < vtxs.size(); i++) {
+			vec4 vec(vtxs[i].x, vtxs[i].y, 0, 1);
+			vec = vec * TranslateMat * RotationMat * InvTranslateMat;
+			vtxs[i] = vec2(vec.x, vec.y);
+		}
+	}
+
+	void Orbit(long deltaTime) {
+		orbitAngle += 360 * deltaTime / 1000;
+		orbitAngle = orbitAngle * M_PI / 180;
+		if (orbitAngle > 360) {
+			orbitAngle -= 360;
+		}
+		mat4 TranslateMat = TranslateMatrix(-vec3(20, 30, 0));
+		mat4 RotationMat = RotationMatrix(orbitAngle, vec3(0, 0, 1));
+		mat4 InvTranslateMat = TranslateMatrix(vec3(20, 30, 0));
+
+		vec4 vec(vtxs[0].x, vtxs[0].y, 0, 1);
+		vec = vec * TranslateMat * RotationMat * InvTranslateMat;
+		vtxs[0] = vec2(vec.x, vec.y);
+
+		vec2 center(vtxs[0].x, vtxs[0].y);
+
+		vtxs[1] = vec2(center.x + s, center.y);
+		vtxs[2] = vec2(center.x + 40, center.y - 40);
+		vtxs[3] = vec2(center.x, center.y - s);
+		vtxs[4] = vec2(center.x - 40, center.y - 40);
+		vtxs[5] = vec2(center.x - s, center.y);
+		vtxs[6] = vec2(center.x - 40, center.y + 40);
+		vtxs[7] = vec2(center.x , center.y + s);
+		vtxs[8] = vec2(center.x + 40, center.y + 40);
+		vtxs[9] = vec2(center.x + s, center.y);
+	}
+
+
+	void Update(long currentTime) {
+		UpdateAngle(currentTime);
+		glBindVertexArray(vao);
+		glBindBuffer(GL_ARRAY_BUFFER, vbo[0]);
+		glBufferData(GL_ARRAY_BUFFER, vtxs.size() * sizeof(vec2), &vtxs[0], GL_DYNAMIC_DRAW);
 	}
 
 	void Create() {
@@ -241,7 +391,7 @@ public:
 		vtxs.push_back(vec2(50, 30 + s));
 		vtxs.push_back(vec2(50 + 40, 30 + 40));
 		vtxs.push_back(vec2(50 + s, 30));
-		glBufferData(GL_ARRAY_BUFFER, vtxs.size() * sizeof(vec3), &vtxs[0], GL_STATIC_DRAW);
+		glBufferData(GL_ARRAY_BUFFER, vtxs.size() * sizeof(vec2), &vtxs[0], GL_DYNAMIC_DRAW);
 	}
 
 	void MakeUVS() {
@@ -256,7 +406,7 @@ public:
 		uvs.push_back(vec2(0, 0.5));
 		uvs.push_back(vec2(0, 1));
 		uvs.push_back(vec2(0.5, 1));
-		glBufferData(GL_ARRAY_BUFFER, uvs.size() * sizeof(vec2), &uvs[0], GL_STATIC_DRAW);
+		glBufferData(GL_ARRAY_BUFFER, uvs.size() * sizeof(vec2), &uvs[0], GL_DYNAMIC_DRAW);
 	}
 
 	void ClearVTX() {
@@ -282,22 +432,11 @@ public:
 	}
 };
 
-int GetCircleCount(CircleCollection* circles, int x, int y) {
-	int circleCount = 0;
-
-	for (int i = 0; i < circles->Size(); i++) {
-		vec3 kurva = vec3(((x / 100.0) - 0.5) * 2, ((y / 100.0) - 0.5) * 2, 0);
-			
-		if (circles->At(i).Contains(kurva)) {
-			circleCount++;
-		}
-		
-	}
-	return circleCount;
-}
 
 
-PoincareTexture* tex;
+
+
+
 Star* star;
 // Initialization, create an OpenGL context
 void onInitialization() {
@@ -306,29 +445,11 @@ void onInitialization() {
 	glPointSize(10);
 
 	circleCollection = new CircleCollection;
+	circleCollection->CreateCircles();
+
 	tex->CreateImage();
-	std::vector<vec4> image;
-	//circleCollection->Add(Circle(vec3(0.5, 0.5, 0), 0.5));
-	Circle base(vec3(0, 0, 0), 0.5);
-	vec3 kurva;
-	for (int i = 0; i < 100; i++) {
-		for (int j = 0; j < 100; j++) {
-			kurva = vec3(((i / 100.0) - 0.5) * 2, ((j / 100.0) - 0.5) * 2, 0);
-			if (base.Contains(kurva)) {
-				image.push_back(vec4(0, 0, 0, 0));
-				printf("asd");
-			}
-			else {
+	tex->UploadTexture();
 
-				int circleCount = GetCircleCount(circleCollection, i, j);
-				if (circleCount % 2 == 0) image.push_back(vec4(1, 1, 0, 0));
-				else image.push_back(vec4(0, 0, 1, 0));
-			}
-			
-		}
-	}
-
-	tex = new PoincareTexture(100, 100, image);
 	camera = new Camera2D(vec2(20, 30), vec2(150, 150));
 	star = new Star(tex);
 
@@ -363,6 +484,26 @@ void onKeyboard(unsigned char key, int pX, int pY) {
 		star->Increment();
 		star->ClearVTX();
 		star->MakeVTX();
+		glutPostRedisplay();
+		break;
+	case 'r':
+		tex->DecreaseResolution();
+		tex->UpdateTexture();
+		glutPostRedisplay();
+		break;
+	case 'R':
+		tex->IncreaseResolution();
+		tex->UpdateTexture();
+		glutPostRedisplay();
+		break;
+	case 't':
+		tex->SetFiltering(GL_NEAREST);
+		tex->UpdateTexture();
+		glutPostRedisplay();
+		break;
+	case 'T':
+		tex->SetFiltering(GL_LINEAR);
+		tex->UpdateTexture();
 		glutPostRedisplay();
 		break;
 	}
@@ -402,4 +543,6 @@ void onMouse(int button, int state, int pX, int pY) { // pX, pY are the pixel co
 // Idle event indicating that some time elapsed: do animation here
 void onIdle() {
 	long time = glutGet(GLUT_ELAPSED_TIME); // elapsed time since the start of the program
+	star->Update(time);
+	glutPostRedisplay();
 }
