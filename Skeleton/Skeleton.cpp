@@ -280,13 +280,14 @@ public:
 	unsigned int vao, vbo[2];
 	PoincareTexture* tex;
 	int s;
-	long time, deltaTime;
+	float currentTime, previousTime, elapsedTime;
 	float rotationAngle, orbitAngle;
 
 	Star(PoincareTexture* texture) {
 		this->tex = texture;
-		this->time = 0;
-		this->deltaTime = 0;
+		this->currentTime = 0;
+		this->previousTime = 0;
+		this->elapsedTime = 0;
 		this->rotationAngle = 0;
 		this->orbitAngle = 0;
 		s = 40;
@@ -301,20 +302,24 @@ public:
 		s -= 10;
 	}
 
-	void UpdateAngle(long currentTime) {
-		deltaTime = currentTime - time;
-		time = currentTime;
+	void UpdateAngle() {
+		elapsedTime = currentTime - previousTime;
+		printf("%.10f\n", elapsedTime);
+		// 2 * M_PI = 360 degrees in rad
 
-		Orbit(deltaTime);
-		Rotate(deltaTime);
+		rotationAngle += (360 * M_PI / 180) * elapsedTime / 500000;
+		orbitAngle += (360 * M_PI / 180) * elapsedTime / 1000000;
+		if (rotationAngle > 2 * M_PI) 
+			rotationAngle -= 2 * M_PI;
+
+		if (orbitAngle > 2 * M_PI) 
+			orbitAngle -= 2 * M_PI;
+		
+
 	}
 
-	void Rotate(long deltaTime) {
-		rotationAngle += 360 * deltaTime / 1000;
-		if (rotationAngle > 360) {
-			rotationAngle -= 360;
-		}
-		rotationAngle = rotationAngle * M_PI / 180;
+	void Rotate() {
+
 		mat4 TranslateMat = TranslateMatrix(-vtxs[0]);
 		mat4 RotationMat = RotationMatrix(rotationAngle, vec3(0, 0, 1));
 		mat4 InvTranslateMat = TranslateMatrix(vtxs[0]);
@@ -327,12 +332,8 @@ public:
 		}
 	}
 
-	void Orbit(long deltaTime) {
-		orbitAngle += 360 * deltaTime / 1000;
-		orbitAngle = orbitAngle * M_PI / 180;
-		if (orbitAngle > 360) {
-			orbitAngle -= 360;
-		}
+	void Orbit() {
+
 		mat4 TranslateMat = TranslateMatrix(-vec3(20, 30, 0));
 		mat4 RotationMat = RotationMatrix(orbitAngle, vec3(0, 0, 1));
 		mat4 InvTranslateMat = TranslateMatrix(vec3(20, 30, 0));
@@ -349,17 +350,24 @@ public:
 		vtxs[4] = vec2(center.x - 40, center.y - 40);
 		vtxs[5] = vec2(center.x - s, center.y);
 		vtxs[6] = vec2(center.x - 40, center.y + 40);
-		vtxs[7] = vec2(center.x , center.y + s);
+		vtxs[7] = vec2(center.x, center.y + s);
 		vtxs[8] = vec2(center.x + 40, center.y + 40);
 		vtxs[9] = vec2(center.x + s, center.y);
 	}
 
 
-	void Update(long currentTime) {
-		UpdateAngle(currentTime);
+
+	void Update() {
+		UpdateAngle();
+		Animate();
 		glBindVertexArray(vao);
 		glBindBuffer(GL_ARRAY_BUFFER, vbo[0]);
 		glBufferData(GL_ARRAY_BUFFER, vtxs.size() * sizeof(vec2), &vtxs[0], GL_DYNAMIC_DRAW);
+	}
+
+	void Animate() {
+		Rotate();
+		Orbit();
 	}
 
 	void Create() {
@@ -418,15 +426,15 @@ public:
 	}
 
 	void Draw() {
+		Update();
 		glBindVertexArray(vao);
 		mat4 MVP = camera->V() * camera->P();
 		gpuProgram.setUniform(MVP, "MVP");
 
-		int sampler = 0; // which sampler unit should be used
-		int location = glGetUniformLocation(gpuProgram.getId(),
-			"samplerUnit");
+		int sampler = 0; 
+		int location = glGetUniformLocation(gpuProgram.getId(), "samplerUnit");
 		glUniform1i(location, sampler);
-		glActiveTexture(GL_TEXTURE0 + sampler); // = GL_TEXTURE0
+		glActiveTexture(GL_TEXTURE0 + sampler); 
 		glBindTexture(GL_TEXTURE_2D, tex->textureId);
 		glDrawArrays(GL_TRIANGLE_FAN, 0, vtxs.size());
 	}
@@ -438,7 +446,6 @@ public:
 
 
 Star* star;
-// Initialization, create an OpenGL context
 void onInitialization() {
 	
 	glViewport(0, 0, windowWidth, windowHeight);
@@ -453,26 +460,21 @@ void onInitialization() {
 	camera = new Camera2D(vec2(20, 30), vec2(150, 150));
 	star = new Star(tex);
 
-	// create program for the GPU
 	gpuProgram.create(vertexSource, fragmentSource, "outColor");
 
 }
 
-// Window has become invalid: Redraw
 void onDisplay() {
-	glClearColor(0, 0, 0, 0);     // background color
-	glClear(GL_COLOR_BUFFER_BIT); // clear frame buffer
-
+	glClearColor(0, 0, 0, 0);     
+	glClear(GL_COLOR_BUFFER_BIT); 
 
 	star->Draw();
 	
-
-	glutSwapBuffers(); // exchange buffers for double buffering
+	glutSwapBuffers(); 
 }
 
-// Key of ASCII code pressed
 void onKeyboard(unsigned char key, int pX, int pY) {
-	if (key == 'd') glutPostRedisplay();         // if d, invalidate display, i.e. redraw
+	if (key == 'd') glutPostRedisplay();         
 	switch (key) {
 	case 'h':
 		star->Decrement();
@@ -509,40 +511,14 @@ void onKeyboard(unsigned char key, int pX, int pY) {
 	}
 }
 
-// Key of ASCII code released
-void onKeyboardUp(unsigned char key, int pX, int pY) {
-}
+void onKeyboardUp(unsigned char key, int pX, int pY) { }
 
-// Move mouse with key pressed
-void onMouseMotion(int pX, int pY) {	// pX, pY are the pixel coordinates of the cursor in the coordinate system of the operation system
-	// Convert to normalized device space
-	float cX = 2.0f * pX / windowWidth - 1;	// flip y axis
-	float cY = 1.0f - 2.0f * pY / windowHeight;
-	printf("Mouse moved to (%3.2f, %3.2f)\n", cX, cY);
-}
+void onMouseMotion(int pX, int pY) { }
 
-// Mouse click event
-void onMouse(int button, int state, int pX, int pY) { // pX, pY are the pixel coordinates of the cursor in the coordinate system of the operation system
-	// Convert to normalized device space
-	float cX = 2.0f * pX / windowWidth - 1;	// flip y axis
-	float cY = 1.0f - 2.0f * pY / windowHeight;
+void onMouse(int button, int state, int pX, int pY) { }
 
-	char * buttonStat;
-	switch (state) {
-	case GLUT_DOWN: buttonStat = "pressed"; break;
-	case GLUT_UP:   buttonStat = "released"; break;
-	}
-
-	switch (button) {
-	case GLUT_LEFT_BUTTON:   printf("Left button %s at (%3.2f, %3.2f)\n", buttonStat, cX, cY);   break;
-	case GLUT_MIDDLE_BUTTON: printf("Middle button %s at (%3.2f, %3.2f)\n", buttonStat, cX, cY); break;
-	case GLUT_RIGHT_BUTTON:  printf("Right button %s at (%3.2f, %3.2f)\n", buttonStat, cX, cY);  break;
-	}
-}
-
-// Idle event indicating that some time elapsed: do animation here
 void onIdle() {
-	long time = glutGet(GLUT_ELAPSED_TIME); // elapsed time since the start of the program
-	star->Update(time);
+	star->previousTime = star->currentTime;
+	star->currentTime = glutGet(GLUT_ELAPSED_TIME) / 1000.f;
 	glutPostRedisplay();
 }
