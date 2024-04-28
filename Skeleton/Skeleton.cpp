@@ -1,5 +1,5 @@
 //=============================================================================================
-// Mintaprogram: Z�ld h�romsz�g. Ervenyes 2019. osztol.
+// Circle Limit
 //
 // A beadott program csak ebben a fajlban lehet, a fajl 1 byte-os ASCII karaktereket tartalmazhat, BOM kihuzando.
 // Tilos:
@@ -18,8 +18,8 @@
 //
 // NYILATKOZAT
 // ---------------------------------------------------------------------------------------------
-// Nev    : 
-// Neptun : 
+// Nev    : Csilling Nandor Noe
+// Neptun : QW5QGQ
 // ---------------------------------------------------------------------------------------------
 // ezennel kijelentem, hogy a feladatot magam keszitettem, es ha barmilyen segitseget igenybe vettem vagy
 // mas szellemi termeket felhasznaltam, akkor a forrast es az atvett reszt kommentekben egyertelmuen jeloltem.
@@ -34,7 +34,7 @@
 #include "framework.h"
 
 // vertex shader in GLSL: It is a Raw string (C++11) since it contains new line characters
-const char * const vertexSource = R"(
+const char* const vertexSource = R"(
 	#version 330
 
 	uniform mat4 MVP;
@@ -49,7 +49,7 @@ const char * const vertexSource = R"(
 )";
 
 // fragment shader in GLSL
-const char * const fragmentSource = R"(
+const char* const fragmentSource = R"(
 	#version 330
 	
 	uniform sampler2D samplerUnit;
@@ -114,15 +114,14 @@ public:
 	}
 
 	bool Contains(vec3 point) {
-		
-		return sqrt(pow(abs(point.x - center.x), 2) + pow(abs(point.y - center.y), 2)) < radius;
+
+		return sqrt(pow(point.x - center.x, 2) + pow(point.y - center.y, 2)) <= radius;
 	}
 };
 
 bool BaseContains(vec3 point) {
-	return sqrt(pow(point.x - 0, 2) + pow(point.y - 0, 2)) < 1;
+	return sqrt(pow(point.x - 0, 2) + pow(point.y - 0, 2)) <= 1;
 }
-
 
 
 
@@ -130,7 +129,7 @@ class CircleCollection {
 	std::vector<Circle> circles;
 public:
 	CircleCollection() {}
-	
+
 	void Add(Circle c) {
 		circles.push_back(c);
 	}
@@ -149,21 +148,23 @@ public:
 
 	void CreateCircles() {
 		vec3 startingPoint(0, 0, 1);
-		float degree = 0;
-		vec3 v0(cos(degree), sin(degree), 0);
-		float t[] = { 0.5, 1.5, 2.5, 3.5, 4.5, 5.5 };
+		float t[] = { 0.5f, 1.5f, 2.5f, 3.5f, 4.5f, 5.5f };
 		std::vector<vec3> hyperbolic;
-		for (int j = 0; j < 9; j++) {
-			degree = j * 40 * M_PI / 180;
-			v0 = vec3(cos(degree), sin(degree), 0);
-			for (int i = 0; i < 6; i++) {
-				vec3 r = startingPoint * cosh(t[i]) + v0 * sinh(t[i]);
+
+		for (int i = 0; i < 9; i++) {
+
+			float degree = i * 40.0f * M_PI / 180.0f;
+			vec3 v0 = vec3(cos(degree), sin(degree), 0);
+
+			for (int j = 0; j < 6; j++) {
+				vec3 r = startingPoint * cosh(t[j]) + v0 * sinh(t[j]);
 				hyperbolic.push_back(r);
+
 			}
 		}
 
 
-		for (int i = 0; i < hyperbolic.size(); i++) {
+		for (unsigned int i = 0; i < hyperbolic.size(); i++) {
 			vec3 r = vec3(hyperbolic[i].x / (hyperbolic[i].z + 1), hyperbolic[i].y / (hyperbolic[i].z + 1), 0);
 			Circle circle;
 			circle.CalcCircle(r);
@@ -178,7 +179,7 @@ public:
 CircleCollection* circleCollection;
 
 
-int GetCircleCount(std::vector<Circle>& circles, int x, int y);
+int GetCircleCount(std::vector<Circle> circles, int x, int y);
 
 
 class PoincareTexture {
@@ -197,8 +198,8 @@ public:
 	}
 	void UploadTexture() {
 		glGenTextures(1, &textureId);
-		glBindTexture(GL_TEXTURE_2D, textureId); 
-		glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, resolutionX, resolutionY, 0, GL_RGBA, GL_FLOAT, &image[0]); 
+		glBindTexture(GL_TEXTURE_2D, textureId);
+		glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, resolutionX, resolutionY, 0, GL_RGBA, GL_FLOAT, &image[0]);
 		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, filter1);
 		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, filter2);
 	}
@@ -211,7 +212,7 @@ public:
 	}
 
 	void DecreaseResolution() {
-		if (resolutionX > 100) 
+		if (resolutionX > 100)
 			resolutionX -= 100;
 		if (resolutionY > 100)
 			resolutionY -= 100;
@@ -222,17 +223,17 @@ public:
 		vec3 pixel;
 		for (int i = 0; i < resolutionX; i++) {
 			for (int j = 0; j < resolutionY; j++) {
-				pixel = vec3(((i / (float) resolutionX) - 0.5) * 2, ((j / (float) resolutionY) - 0.5) * 2, 0);
+				pixel = vec3((((i + 0.5f) / (float)resolutionX) - 0.5f) * 2.0f, (((j + 0.5f) / (float)resolutionY) - 0.5f) * 2.0f, 0);
 				int circleCount = GetCircleCount(circleCollection->GetCircles(), i, j);
 				if (!BaseContains(pixel)) {
-					image.push_back(vec4(0, 0, 0, 0));
+					image.push_back(vec4(0, 0, 0, 1));
 				}
 
 				else {
 					if (circleCount % 2 == 0)
-						image.push_back(vec4(1, 1, 0, 0));
+						image.push_back(vec4(1, 1, 0, 1));
 					else
-						image.push_back(vec4(0, 0, 1, 0));
+						image.push_back(vec4(0, 0, 1, 1));
 				}
 
 			}
@@ -255,13 +256,13 @@ public:
 	}
 };
 
-PoincareTexture* tex = new PoincareTexture(100, 100, GL_NEAREST, GL_LINEAR);
+PoincareTexture* tex = new PoincareTexture(100, 100, GL_LINEAR, GL_LINEAR);
 
-int GetCircleCount(std::vector<Circle>& circles, int x, int y) {
+int GetCircleCount(std::vector<Circle> circles, int x, int y) {
 	int circleCount = 0;
 
-	for (int i = 0; i < circles.size(); i++) {
-		vec3 pixel = vec3(((x / (float) tex->resolutionX) - 0.5) * 2, ((y / (float) tex->resolutionY) - 0.5) * 2, 0);
+	for (unsigned int i = 0; i < circles.size(); i++) {
+		vec3 pixel = vec3(((x / (float)tex->resolutionX) - 0.5f) * 2.0f, ((y / (float)tex->resolutionY) - 0.5f) * 2.0f, 0);
 
 		if (circles[i].Contains(pixel)) {
 			circleCount++;
@@ -282,6 +283,7 @@ public:
 	int s;
 	float currentTime, previousTime, elapsedTime;
 	float rotationAngle, orbitAngle;
+	bool startAnimation;
 
 	Star(PoincareTexture* texture) {
 		this->tex = texture;
@@ -290,6 +292,7 @@ public:
 		this->elapsedTime = 0;
 		this->rotationAngle = 0;
 		this->orbitAngle = 0;
+		this->startAnimation = false;
 		s = 40;
 		Create();
 	}
@@ -300,22 +303,6 @@ public:
 
 	void Decrement() {
 		s -= 10;
-	}
-
-	void UpdateAngle() {
-		elapsedTime = currentTime - previousTime;
-		printf("%.10f\n", elapsedTime);
-		// 2 * M_PI = 360 degrees in rad
-
-		rotationAngle += (360 * M_PI / 180) * elapsedTime / 500000;
-		orbitAngle += (360 * M_PI / 180) * elapsedTime / 1000000;
-		if (rotationAngle > 2 * M_PI) 
-			rotationAngle -= 2 * M_PI;
-
-		if (orbitAngle > 2 * M_PI) 
-			orbitAngle -= 2 * M_PI;
-		
-
 	}
 
 	void Rotate() {
@@ -358,16 +345,29 @@ public:
 
 
 	void Update() {
-		UpdateAngle();
-		Animate();
+
+		elapsedTime = currentTime - previousTime;
+		previousTime = currentTime;
+
+		if (startAnimation)
+			Animate();
+
+		rotationAngle += (2 * M_PI) * (elapsedTime / 5.0);
+		orbitAngle = (2 * M_PI) * (elapsedTime / 10.0);
+		if (rotationAngle > 2 * M_PI)
+			rotationAngle -= 2 * M_PI;
+
+		if (orbitAngle > 2 * M_PI)
+			orbitAngle -= 2 * M_PI;
+
 		glBindVertexArray(vao);
 		glBindBuffer(GL_ARRAY_BUFFER, vbo[0]);
 		glBufferData(GL_ARRAY_BUFFER, vtxs.size() * sizeof(vec2), &vtxs[0], GL_DYNAMIC_DRAW);
 	}
 
 	void Animate() {
-		Rotate();
 		Orbit();
+		Rotate();
 	}
 
 	void Create() {
@@ -431,10 +431,10 @@ public:
 		mat4 MVP = camera->V() * camera->P();
 		gpuProgram.setUniform(MVP, "MVP");
 
-		int sampler = 0; 
+		int sampler = 0;
 		int location = glGetUniformLocation(gpuProgram.getId(), "samplerUnit");
 		glUniform1i(location, sampler);
-		glActiveTexture(GL_TEXTURE0 + sampler); 
+		glActiveTexture(GL_TEXTURE0 + sampler);
 		glBindTexture(GL_TEXTURE_2D, tex->textureId);
 		glDrawArrays(GL_TRIANGLE_FAN, 0, vtxs.size());
 	}
@@ -447,9 +447,8 @@ public:
 
 Star* star;
 void onInitialization() {
-	
-	glViewport(0, 0, windowWidth, windowHeight);
-	glPointSize(10);
+
+	glViewport(0, 0, 600, 600);
 
 	circleCollection = new CircleCollection;
 	circleCollection->CreateCircles();
@@ -460,21 +459,23 @@ void onInitialization() {
 	camera = new Camera2D(vec2(20, 30), vec2(150, 150));
 	star = new Star(tex);
 
-	gpuProgram.create(vertexSource, fragmentSource, "outColor");
+	star->previousTime = glutGet(GLUT_ELAPSED_TIME) / 1000.f;
+
+	gpuProgram.create(vertexSource, fragmentSource, "fragmentColor");
 
 }
 
 void onDisplay() {
-	glClearColor(0, 0, 0, 0);     
-	glClear(GL_COLOR_BUFFER_BIT); 
+	glClearColor(0, 0, 0, 0);
+	glClear(GL_COLOR_BUFFER_BIT);
 
 	star->Draw();
-	
-	glutSwapBuffers(); 
+
+	glutSwapBuffers();
 }
 
 void onKeyboard(unsigned char key, int pX, int pY) {
-	if (key == 'd') glutPostRedisplay();         
+	if (key == 'd') glutPostRedisplay();
 	switch (key) {
 	case 'h':
 		star->Decrement();
@@ -508,6 +509,10 @@ void onKeyboard(unsigned char key, int pX, int pY) {
 		tex->UpdateTexture();
 		glutPostRedisplay();
 		break;
+	case 'a':
+		star->startAnimation = true;
+		glutPostRedisplay();
+		break;
 	}
 }
 
@@ -518,7 +523,7 @@ void onMouseMotion(int pX, int pY) { }
 void onMouse(int button, int state, int pX, int pY) { }
 
 void onIdle() {
-	star->previousTime = star->currentTime;
 	star->currentTime = glutGet(GLUT_ELAPSED_TIME) / 1000.f;
+
 	glutPostRedisplay();
 }
